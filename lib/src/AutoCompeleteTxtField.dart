@@ -1,168 +1,160 @@
 import 'package:flutter/material.dart';
-
-class AutoCompeleteTextField extends StatefulWidget {
-  final List<String> suggestions;
-  final decoration;
-  final listElevation;
-  final width;
-  final onTextSubmited;
-  final collapsed;
-  AutoCompeleteTextField(
-      {Key key,
-      @required this.suggestions,
-      this.decoration,
-      this.listElevation,
-      this.width,
-      this.onTextSubmited(String value),
-      this.collapsed});
+typedef StringCallBack = Function(String);
+class AutoCompleteTextSearchField extends StatefulWidget {
+  //Constructor
+  ///TextEditingController
+  final TextEditingController? textEditingController;
+  ///List of Strings that you wanna to
+  final List<String>? suggestions;
+  ///InputDecoration you can decorate your text field as any other
+  final InputDecoration? inputDecoration;
+  ///The padding between menu and screen in two sides
+  final double? menuSidePadding;
+  ///Menu layout border radius
+  final BorderRadius? menuBorderRadius;
+  ///Menu Elevation (Shadow)
+  final double? menuElevation;
+  ///Menu item select callback
+  final StringCallBack? onItemSelect;
+  AutoCompleteTextSearchField(
+      {Key? key,
+        required this.suggestions,
+        this.inputDecoration,
+        this.menuBorderRadius,
+        this.menuSidePadding,
+        this.menuElevation = 1.0,
+        this.textEditingController,
+        required this.onItemSelect})
+      : super(key: key);
 
   @override
-  _MACTextFieldState createState() => _MACTextFieldState();
+  _AutoCompleteTextSearchFieldState createState() => _AutoCompleteTextSearchFieldState();
 }
 
-class _MACTextFieldState extends State<AutoCompeleteTextField> {
-  List<String> _list = [];
-  List<String> tempList;
-  var _size;
-  var view;
-  double _listHight;
-
-  TextEditingController _controller = TextEditingController();
+class _AutoCompleteTextSearchFieldState extends State<AutoCompleteTextSearchField> {
+  OverlayEntry? floating;
+  GlobalKey? floatingKey;
 
   @override
-  void didChangeDependencies() {
-    _size = 0;
-    _listHight = 0.0;
-    print(_list);
-    super.didChangeDependencies();
+  void initState() {
+    ///This global key to be assigned in the render box
+    floatingKey = LabeledGlobalKey("Floating");
+    super.initState();
   }
-
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      child: Column(
-        children: <Widget>[
+    return WillPopScope(
+      child: Stack(
+        key: floatingKey,
+        children: [
           TextField(
-            controller: _controller,
-            decoration: widget.decoration,
-            onChanged: (val) => _suggestionsFilter(val),
-            onSubmitted: (val) => widget.onTextSubmited(val),
+            controller: widget.textEditingController,
+            decoration: widget.inputDecoration,
+            autofocus: false,
+            onChanged: (val) => _startFiltering(val),
           ),
-          (widget.collapsed == null || widget.collapsed == false)
-              ? Card(
-                  elevation: widget.listElevation,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Container(
-                      transform:
-                          Matrix4.translationValues(0, _listHight * _size, 0),
-                      height: _size * 55.0,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        color: Colors.white,
-                      ),
-                      child: _suggestionList(_list)),
-                )
-              : Container(
-                  child: _suggestionList(_list),
-                  height: 40.0,
-                )
         ],
       ),
-      width: widget.width,
+      ///On Back Button pressed
+      onWillPop: _onBackPressed,
     );
   }
 
-  Widget _suggestionList(List sList) {
-    return ScrollConfiguration(
-      child: ListView.builder(
-          scrollDirection:
-              (widget.collapsed == null || widget.collapsed == false)
-                  ? Axis.vertical
-                  : Axis.horizontal,
-          itemCount: sList.length,
-          padding: EdgeInsets.only(top: 0),
-          primary: true,
-          itemBuilder: (context, indx) =>
-              (widget.collapsed == null || widget.collapsed == false)
-                  ? _nonCollapsed(sList, indx)
-                  : _collapsed(sList, indx)),
-      behavior: NoGlow(),
-    );
-  }
-
-  Widget _nonCollapsed(List sList, indx) {
-    return ListTile(
-      title: Text(sList[indx].toString()),
-      onTap: () {
-        _controller.text = sList[indx].toString();
-        setState(() {
-          _list.clear();
-          _size = 0.0;
-        });
-      },
-      onLongPress: () {
-        _controller.text = sList[indx].toString();
-        setState(() {
-          _list.clear();
-          _size = 0.0;
-        });
-      },
-    );
-  }
-
-  Widget _collapsed(List sList, indx) {
-    return GridTile(
-        child: GestureDetector(
-      child: Padding(
-        child: Container(
-          child: Center(
-            child: Text(sList[indx].toString()),
-          ),
-        ),
-        padding: EdgeInsets.only(right: 8, left: 8),
-      ),
-      onTap: () {
-        _controller.text = sList[indx].toString();
-        setState(() {
-          _list.clear();
-          _size = 0.0;
-        });
-      },
-      onLongPress: () {
-        _controller.text = sList[indx].toString();
-        setState(() {
-          _list.clear();
-          _size = 0.0;
-        });
-      },
-    ));
-  }
-
-  void _suggestionsFilter(txtValue) {
-    _list.clear();
-    for (var value in widget.suggestions) {
-      if (txtValue != '' && _igonreCaseSenstivity(value, txtValue)) {
-        _list.add(value);
-        view = _suggestionList(_list);
+  ///This method for filtering the list and provide the suggestions depend on user input
+  void _startFiltering(String val) {
+    List<String> filter = widget.suggestions!.where((element) => _equalsIgnoreCase(element, val)).toList();
+    print(filter);
+    ///These are validations to insure that the menu will disappear when no suggestions and show up in other case
+    if (filter.isNotEmpty) {
+      if (floating != null) {
+        floating!.remove();
+        floating = null;
+      }
+      floating = _createFloating(filter);
+      Overlay.of(floatingKey!.currentContext!)!.insert(floating!);
+    } else {
+      if (floating != null) {
+        floating!.remove();
+        floating = null;
       }
     }
-    setState(() {
-      _size = _list.length;
+    if (val.isEmpty) {
+      if (floating != null) {
+        floating!.remove();
+        floating = null;
+      }
+    }
+  }
+
+  ///Method to show up menu as a overlay menu
+  OverlayEntry _createFloating(List<String> filtered) {
+    ///RenderBox to determine the location of the textfield on screen
+    final renderBox = floatingKey!.currentContext!.findRenderObject() as RenderBox;
+    Offset offset = renderBox.localToGlobal(Offset.zero);
+    return OverlayEntry(builder: (context) {
+      return Positioned(
+          left: 10,
+          right: 10,
+          top: offset.dy + 35,
+          child: Material(
+            color: Colors.transparent,
+            elevation: 20,
+            child: Card(
+              elevation: widget.menuElevation,
+              shape: RoundedRectangleBorder(
+                  borderRadius: widget.menuBorderRadius != null
+                      ? widget.menuBorderRadius!
+                      : BorderRadius.circular(10)),
+              child: ListView.builder(
+                physics: BouncingScrollPhysics(),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    title: Text(filtered[index]),
+                    onTap: () {
+                      String selected = filtered[index];
+                      widget.onItemSelect!(selected);
+                      widget.textEditingController!.text = selected;
+                      widget.textEditingController!.selection = TextSelection(baseOffset: selected.length, extentOffset: selected.length);
+
+                      FocusScopeNode currentFocus = FocusScope.of(context);
+
+                      if (!currentFocus.hasPrimaryFocus) {
+                        currentFocus.unfocus();
+                      }
+
+                      if (floating != null) {
+                        floating!.remove();
+                        floating = null;
+                      }
+                    },
+                  ),
+                ),
+                shrinkWrap: true,
+              ),
+            ),
+          ));
     });
   }
 
-  bool _igonreCaseSenstivity(String value, String txtValue) {
-    var exprsion =
-        (value.toLowerCase().startsWith(txtValue.toString().toLowerCase()) ||
-            value.toLowerCase().startsWith(txtValue.toString().toLowerCase()));
-    return exprsion;
+  ///this method to ignore the Lower/Upper case
+  bool _equalsIgnoreCase(String string1, String string2) {
+    return string1.toLowerCase().startsWith(string2.toLowerCase());
   }
-}
 
-class NoGlow extends ScrollBehavior {
+  ///On User back button press will remove the menu just regular behaviour
+  Future<bool> _onBackPressed() {
+    if (floating != null) {
+      floating!.remove();
+      floating = null;
+      return Future.value(false);
+    }
+    return Future.value(true);
+  }
   @override
-  Widget buildViewportChrome(
-          BuildContext context, Widget child, AxisDirection axisDirection) =>
-      child;
+  void dispose() {
+    widget.textEditingController!.dispose();
+    super.dispose();
+  }
 }

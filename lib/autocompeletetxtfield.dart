@@ -1,3 +1,2 @@
-library autocompeletetxtfield;
-
+library autocompletetextfield;
 export 'src/AutoCompeleteTxtField.dart';

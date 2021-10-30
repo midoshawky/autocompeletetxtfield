@@ -1,3 +1,3 @@
-## [0.0.5] - April 2, 2020
+## 1.0.0
 
-* Nothing change just testing few things 
+* Final Publish
